@@ -1,1 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CTR Opportunity Scoring for Search Content Prioritization</title>
+<meta name="description" content="FlyRank ML Internship capstone research paper on CTR opportunity scoring and search-content prioritization.">
+<style>
+:root{--ink:#14213d;--muted:#667085;--line:#e6eaf0;--paper:#fff;--bg:#f5f7fb;--accent:#2563eb;--accent2:#0f766e;--soft:#eef4ff}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.7 Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+main{max-width:1080px;margin:42px auto;padding:0 22px}.hero{background:linear-gradient(135deg,#14213d,#243b68);color:#fff;border-radius:24px;padding:56px 54px;box-shadow:0 18px 50px #14213d22}
+.kicker{text-transform:uppercase;letter-spacing:.14em;font-size:12px;font-weight:800;opacity:.75}.hero h1{font-size:46px;line-height:1.08;margin:16px 0}.hero p{font-size:19px;max-width:820px;color:#dbe7ff}.tag{display:inline-block;padding:6px 10px;border:1px solid #ffffff33;border-radius:999px;margin:4px 6px 0 0;font-size:12px}
+section{background:var(--paper);margin:22px 0;padding:36px 40px;border-radius:20px;border:1px solid var(--line);box-shadow:0 8px 30px #14213d0a}
+h2{font-size:28px;margin:0 0 18px}h3{font-size:20px;margin-top:28px}.lead{font-size:18px;color:#344054}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.card{border:1px solid var(--line);border-radius:16px;padding:20px;background:#fff}.num{font-size:30px;font-weight:850;color:var(--accent)}.label{color:var(--muted);font-size:13px;margin-top:2px}
+table{width:100%;border-collapse:collapse;margin:18px 0}th,td{padding:13px 14px;border-bottom:1px solid var(--line);text-align:left}th{background:#f8fafc}
+.barwrap{margin:18px 0}.barlabel{display:flex;justify-content:space-between;font-weight:700;font-size:14px}.bar{height:13px;background:#e9eef7;border-radius:99px;overflow:hidden}.fill{height:100%;background:var(--accent);border-radius:99px}.fill2{background:var(--accent2)}
+.callout{background:var(--soft);border-left:4px solid var(--accent);padding:18px 20px;border-radius:10px;margin:20px 0}
+ol,ul{padding-left:22px}.small{font-size:13px;color:var(--muted)}footer{text-align:center;color:var(--muted);padding:28px}
+a{color:var(--accent)}code{background:#f1f5f9;padding:2px 6px;border-radius:5px}
+@media(max-width:800px){.grid{grid-template-columns:repeat(2,1fr)}.hero{padding:38px 28px}.hero h1{font-size:36px}section{padding:28px 24px}}
+@media(max-width:520px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<main>
+<header class="hero">
+<div class="kicker">FlyRank ML Internship · Capstone Research</div>
+<h1>CTR Opportunity Scoring for Search Content Prioritization</h1>
+<p>Can a machine-learning ranking system identify search-content pages that deserve CTR-focused review better than a simple search-volume baseline?</p>
+<span class="tag">Random Forest</span><span class="tag">CTR Opportunity</span><span class="tag">Search Intelligence</span><span class="tag">Decision Support</span>
+</header>
 
+<section>
+<h2>Abstract</h2>
+<p class="lead">This study asks whether a machine-learning model can improve the prioritization of search-content pages that show potential for CTR improvement compared with a simple search-volume ranking baseline. Using the FlyRank <code>ranking_lifecycle</code> dataset, the analysis constructs a CTR opportunity label from observed impressions, clicks, and position-band CTR benchmarks, then trains a Random Forest classifier using safe content, demand, age, intent, and platform-availability features. On the same held-out test set, the Random Forest achieved a ROC-AUC of <strong>0.6974</strong> and Average Precision of <strong>0.5414</strong>, compared with <strong>0.5596</strong> and <strong>0.3702</strong> for the search-volume baseline. The model was then used with five-fold out-of-fold probabilities to create a repeatable ranked opportunity queue and separate high-confidence opportunities from model-only discovery cases. The resulting system is intended as decision support for prioritizing title and snippet reviews, not as proof of causal SEO impact or a guarantee of future traffic gains.</p>
+</section>
+
+<section>
+<h2>1. Introduction / Problem Statement</h2>
+<p>Search teams often have more pages worth reviewing than they can realistically inspect manually. A simple prioritization rule such as sorting pages by search volume can surface pages with demand, but it does not directly account for whether a page appears to be under-capturing clicks relative to its observed search position.</p>
+<div class="callout"><strong>Decision supported:</strong> Which visible content pages should be prioritized for CTR-oriented review?</div>
+<p>The objective is to create a repeatable, evidence-based ranking system that helps a content team decide where review effort should be concentrated first. The model is not presented as proof that a title, snippet, or content change will cause a traffic or ranking improvement.</p>
+</section>
+
+<section>
+<h2>2. Data</h2>
+<p>The notebook loads the FlyRank <code>ranking_lifecycle</code> configuration from <code>FlyRank/internship-lanes</code>. The training split contains <strong>205,749 rows and 34 columns</strong>.</p>
+<div class="grid">
+<div class="card"><div class="num">205,749</div><div class="label">Rows</div></div>
+<div class="card"><div class="num">34</div><div class="label">Columns</div></div>
+<div class="card"><div class="num">30d</div><div class="label">Performance window</div></div>
+<div class="card"><div class="num">102,197</div><div class="label">Modeling rows</div></div>
+</div>
+<p>Fields include hashed content/client/keyword identifiers, keyword and URL structure, title structure, search volume, content type, main intent, content age, platform-availability flags, 30-day impressions/clicks/CTR/position, and related engagement fields.</p>
+<p>The notebook documents substantial missingness in some engagement fields. For example, engagement rate and AI-traffic percentage each have 102,382 missing values, while search volume has 14,277 missing values. These fields are handled conservatively and the final predictive feature set avoids direct use of the target-defining performance measures.</p>
+<p class="small">No public client names, domains, private queries, credentials, or raw exports are exposed in this paper.</p>
+</section>
+
+<section>
+<h2>3. Methodology</h2>
+<h3>3.1 Opportunity universe</h3>
+<p>The analysis first restricts to pages with observable search visibility: impressions greater than zero and average position greater than zero. For the machine-learning stage, pages with at least 100 impressions in the 30-day period are retained.</p>
+<h3>3.2 CTR opportunity label</h3>
+<p>Pages are evaluated against smoothed CTR benchmarks for position bands: Top 3, positions 4–10, 11–20, 21–50, and 50+. The opportunity signal uses the positive gap between benchmark CTR and observed CTR, weighted by log impressions so that meaningful demand contributes without letting extreme volume dominate.</p>
+<h3>3.3 Predictive features</h3>
+<ul>
+<li>Keyword character and token counts</li><li>URL character count and path depth</li>
+<li>Title character and token counts</li><li>Search volume</li><li>Content type and main intent</li>
+<li>Content age</li><li>GSC and GA4 availability indicators</li>
+</ul>
+<h3>3.4 Model and validation</h3>
+<p>A Random Forest classifier uses 250 trees, maximum depth 12, minimum leaf size 20, balanced class weighting, and a fixed random seed. Numeric features are median-imputed; categorical features use most-frequent imputation and one-hot encoding. The initial evaluation uses an 80/20 stratified train/test split. Five-fold stratified out-of-fold probabilities are then generated for the final ranking queue.</p>
+<h3>3.5 Baseline</h3>
+<p>The baseline ranks pages directly by search volume. The baseline and Random Forest are evaluated on the same held-out test set.</p>
+</section>
+
+<section>
+<h2>4. Results</h2>
+<div class="grid">
+<div class="card"><div class="num">0.6974</div><div class="label">Random Forest ROC-AUC</div></div>
+<div class="card"><div class="num">0.5414</div><div class="label">Random Forest Avg. Precision</div></div>
+<div class="card"><div class="num">0.4968</div><div class="label">Precision</div></div>
+<div class="card"><div class="num">0.5171</div><div class="label">F1</div></div>
+</div>
+<table>
+<thead><tr><th>Method</th><th>ROC-AUC</th><th>Average Precision</th></tr></thead>
+<tbody><tr><td>Search-volume baseline</td><td>0.5596</td><td>0.3702</td></tr>
+<tr><td><strong>Random Forest</strong></td><td><strong>0.6974</strong></td><td><strong>0.5414</strong></td></tr></tbody>
+</table>
+<div class="barwrap"><div class="barlabel"><span>ROC-AUC · Search-volume baseline</span><span>0.5596</span></div><div class="bar"><div class="fill" style="width:55.96%"></div></div></div>
+<div class="barwrap"><div class="barlabel"><span>ROC-AUC · Random Forest</span><span>0.6974</span></div><div class="bar"><div class="fill fill2" style="width:69.74%"></div></div></div>
+<div class="barwrap"><div class="barlabel"><span>Average Precision · Search-volume baseline</span><span>0.3702</span></div><div class="bar"><div class="fill" style="width:37.02%"></div></div></div>
+<div class="barwrap"><div class="barlabel"><span>Average Precision · Random Forest</span><span>0.5414</span></div><div class="bar"><div class="fill fill2" style="width:54.14%"></div></div></div>
+<p>The Random Forest improves ROC-AUC by <strong>0.1378</strong> over the baseline and Average Precision by <strong>0.1712</strong> on the same held-out test set.</p>
+</section>
+
+<section>
+<h2>5. Ranked Recommendations</h2>
+<ol>
+<li><strong>Prioritize high-confidence, demand-backed pages.</strong> Begin with pages receiving high model probability and meaningful search demand.</li>
+<li><strong>Review title and snippet alignment.</strong> Inspect whether the existing SERP-facing metadata clearly communicates intent and value.</li>
+<li><strong>Use the business opportunity score.</strong> Balance model confidence with normalized search-demand strength rather than sorting by volume alone.</li>
+<li><strong>Keep model-only discoveries separate.</strong> Low-demand pages with strong model scores are discovery candidates and should receive additional validation before substantial effort.</li>
+<li><strong>Refresh the ranking periodically.</strong> Re-run the same feature, label, validation, and ranking pipeline as new performance data becomes available.</li>
+</ol>
+<div class="callout"><strong>Recommended action:</strong> <code>PRIORITIZE_TITLE_SNIPPET_REVIEW</code>. This is a human-review recommendation, not an automated instruction.</div>
+</section>
+
+<section>
+<h2>6. Limitations & Honest Framing</h2>
+<ul>
+<li>The CTR opportunity label is constructed from observed position-band behavior; it is not ground truth for whether an optimization will succeed.</li>
+<li>The primary evaluation uses a stratified random split. A future deployment should consider time-aware validation when sufficiently separated future labels are available.</li>
+<li>The model identifies associations, not causal effects. It cannot prove that changing a title or snippet will increase CTR, rankings, or traffic.</li>
+<li>Hashed identifiers and aggregated fields limit page-level explanatory context.</li>
+<li>Missingness in warehouse fields may reflect differences in instrumentation or platform availability.</li>
+</ul>
+<p><strong>Interpretation:</strong> observed, directional, decision-support evidence — not causal proof or a guarantee of future performance.</p>
+</section>
+
+<section>
+<h2>7. Reproducibility</h2>
+<p>The complete analysis is implemented in the accompanying Google Colab/Jupyter notebook, including data loading, exploratory analysis, baseline construction, opportunity labeling, Random Forest training, evaluation, out-of-fold ranking, feature importance, opportunity segmentation, and business queue construction.</p>
+<p><strong>Repository:</strong> <a href="https://github.com/data00077/flyrank-ml-internship">github.com/data00077/flyrank-ml-internship</a></p>
+<p><strong>Notebook:</strong> Customer_Booking_Prediction_Capstone.ipynb</p>
+<p>For the final capstone structure, the repository should contain <code>work/</code> for assignment/capstone notebooks and <code>submission/paper_url.txt</code> containing exactly one line with this paper's deployed URL.</p>
+</section>
+
+<section>
+<h2>8. Acknowledgments & Data Credit</h2>
+<p>Built on the <strong>FlyRank ML Internship dataset</strong>.</p>
+<p>Data source: <a href="https://flyrank.ai">FlyRank</a>.</p>
+<p>The public-facing research intentionally avoids client names, domains, private queries, credentials, raw exports, and unsupported claims about Google's algorithms or causal refresh impact.</p>
+</section>
+
+<section>
+<h2>9. Conclusion</h2>
+<p>This project demonstrates a practical approach to prioritizing CTR-oriented content review using search-performance data. The Random Forest improved ROC-AUC from 0.5596 for the search-volume baseline to 0.6974 and Average Precision from 0.3702 to 0.5414 on the same held-out test set.</p>
+<p>The most appropriate use of the system is therefore <strong>evidence-based prioritization of human review</strong>, with the ranking refreshed as new data becomes available.</p>
+</section>
+
+<footer>FlyRank ML Internship · CTR Opportunity Scoring · Research Paper</footer>
+</main>
+</body>
+</html>
