@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ranking Declining Content Pages: Observable Signals vs a Transparent Baseline</title>
+<meta name="description" content="A client-holdout study on 30,000 anonymized content pages: a random forest ranked observed-declining pages far better than a transparent weighted baseline.">
+<style>
+:root{--bg:#fcfcfd;--ink:#1b2430;--mute:#5b6675;--line:#d9dee6;--acc:#1f4e8c;--soft:#eef2f8;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#14181f;--ink:#e6e9ee;--mute:#a3acb9;--line:#2c3441;--acc:#8db4ee;--soft:#1c222c}}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:1.075rem/1.7 Charter,"Iowan Old Style",Georgia,serif}
+main{max-width:46rem;margin:0 auto;padding:3rem 1.25rem 4rem}
+h1{font-size:2.1rem;line-height:1.2;margin:0 0 .6rem}
+h2{font-size:1.4rem;margin:2.6rem 0 .6rem;padding-top:.4rem;border-top:1px solid var(--line)}
+h3{font-size:1.05rem;margin:1.4rem 0 .3rem}
+.by{color:var(--mute);margin:0 0 1.6rem}
+a{color:var(--acc)}
+nav{background:var(--soft);border-left:3px solid var(--acc);padding:.8rem 1rem;margin:1.5rem 0;font-size:.95rem}
+nav a{margin-right:.9rem;white-space:nowrap;display:inline-block}
+.abs{border-left:3px solid var(--acc);padding-left:1rem}
+.abs p{margin:.3rem 0}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.95rem;margin:1rem 0}
+th,td{padding:.45rem .6rem;border-bottom:1px solid var(--line);text-align:right}
+th:first-child,td:first-child{text-align:left}
+tr.best td{font-weight:700;background:var(--soft)}
+figure{margin:1.6rem 0}
+figure img{max-width:100%;height:auto;background:#fff;border:1px solid var(--line)}
+figcaption{font-size:.9rem;color:var(--mute);margin-top:.4rem}
+code{font:.9em ui-monospace,Consolas,monospace;background:var(--soft);padding:.05em .3em}
+li{margin:.4rem 0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--line);color:var(--mute);font-size:.95rem}
+</style>
+</head>
+<body>
+<main>
+<h1>Ranking Declining Content Pages: Observable Signals vs a Transparent Baseline</h1>
+<p class="by">Muhammad Laeeq ur Rehman · FlyRank Machine Learning Internship · October 2026</p>
+
+<section class="abs" aria-labelledby="abs-h">
+<h2 id="abs-h" style="border:0;margin-top:0">Abstract</h2>
+<p>Can observable page signals rank content pages that are observed to be declining better than a transparent baseline score? We used an anonymized slice of 30,000 content pages from 32 clients, trained logistic regression, decision tree and random forest models, and tested them on held-out clients (2,325 pages from 6 clients) against a weighted visibility, freshness and position score. The random forest ranked best: 74% of its top 50 pages were observed declining versus 24% for the baseline and about 39% for a random pick, with ROC AUC 0.750 versus 0.627. The model was selected on the same split and the top-50 sample is small, so these results are directional rather than production evidence. They support using the model ranking as a decision aid for ordering refresh reviews, not as proof that refreshing a page improves its trend.</p>
+</section>
+
+<nav aria-label="Contents">
+<a href="#intro">1 Introduction</a><a href="#data">2 Data</a><a href="#method">3 Methodology</a><a href="#results">4 Results</a><a href="#limits">5 Limitations</a><a href="#recs">6 Recommendations</a><a href="#repro">7 Reproducibility</a><a href="#ack">8 Acknowledgments</a>
+</nav>
+
+<h2 id="intro">1 Introduction</h2>
+<p>A content team with thousands of published pages cannot review them all. The practical question is which pages to look at first. This paper asks whether observable page signals (age, freshness, visibility, search position, content type) can rank pages that are observed to be declining better than a transparent weighted score, so that a team can order its refresh reviews. A hand-written score fixes its weights in advance; a model can combine many signals and be tested on clients it has never seen.</p>
+
+<h2 id="data">2 Data</h2>
+<p>The data is the anonymized starter slice of the FlyRank ML Internship dataset: 30,000 content items from 32 clients and 44 columns, one row per pseudonymized page. It reports 90-day search and engagement metrics plus last-30 and previous-30-day comparisons. It has no calendar date column, so validation is by client, not by date. Client names, domains, URLs, titles and queries were removed before release.</p>
+<p><strong>Excluded as features:</strong> hashed content and client IDs (used only for grouping); trend fields (<code>trend_direction</code>, <code>trend_pct</code>), because the label is derived from them; and last-30 and previous-30-day comparison columns, to avoid indirect leakage into the label. No rows were dropped (30,000 raw, 30,000 prepared; no duplicate page IDs). The columns with the most missing values are the content provider (71.5%) and word and character counts (25.7%).</p>
+
+<h2 id="method">3 Methodology</h2>
+<h3>Assumptions and label</h3>
+<p>A page whose observed 90-day trend direction is “down” is called declining (<code>trend_direction == 'down'</code>). 54.2% of pages are positive. The slice is treated as representative enough for a first, directional analysis.</p>
+<h3>Features</h3>
+<p>26 model inputs: 18 numeric (visibility, clicks and sessions on log scale, active days, age, days since update, CTR, average position, engagement, scroll, AI traffic share, word and character counts, search volume, competition, CPC) and 8 categorical (competition level, content type, intent, and age, freshness, word-count, impression and position tiers). One-hot encoding gives 52 columns.</p>
+<h3>Baseline</h3>
+<p>A transparent weighted score: 40% visibility (percentile of log 90-day impressions), 30% freshness risk (percentile of days since last update), 25% position opportunity (closeness to the top positions, weighted by visibility) and 5% depth gap (thin content weighted by visibility). Pages are ranked highest score first. The score does not use the label or any trend field.</p>
+<h3>Validation design</h3>
+<p>A client-holdout split with seed 42: 27,675 training pages and 2,325 test pages from 6 clients the models never saw. Logistic regression, a decision tree and a random forest were compared with the baseline on the same test pages.</p>
+<h3>Leakage checks</h3>
+<p>Trend fields and last-30 and previous-30-day columns are excluded from features, hashed IDs are used only for grouping, and a code check in the notebook confirms that none of these columns is among the 26 model features.</p>
+
+<h2 id="results">4 Results</h2>
+<p>Because the use is a review queue, the main metric is <em>precision at top k</em>: the share of the k highest-ranked pages that are observed declining. ROC AUC checks the whole ranking. About 39% of test pages are observed declining (54% across all pages), so a random pick of k pages would score about 0.39.</p>
+<div class="scroll"><table>
+<caption style="text-align:left;color:var(--mute);font-size:.9rem;caption-side:bottom;padding-top:.4rem">Table 1. All methods on the same held-out clients (2,325 pages, 6 clients).</caption>
+<thead><tr><th>Method</th><th>ROC AUC</th><th>Avg. precision</th><th>P@20</th><th>P@50</th><th>P@100</th><th>Recall</th></tr></thead>
+<tbody>
+<tr><td>Baseline score</td><td>0.627</td><td>0.468</td><td>0.15</td><td>0.24</td><td>0.36</td><td>0.189</td></tr>
+<tr><td>Logistic regression</td><td>0.700</td><td>0.522</td><td>0.35</td><td>0.40</td><td>0.44</td><td>0.567</td></tr>
+<tr><td>Decision tree</td><td>0.742</td><td>0.575</td><td>0.45</td><td>0.58</td><td>0.62</td><td>0.716</td></tr>
+<tr class="best"><td>Random forest</td><td>0.750</td><td>0.618</td><td>0.65</td><td>0.74</td><td>0.72</td><td>0.744</td></tr>
+</tbody></table></div>
+<figure><img src="assets/model_vs_baseline.png" alt="Bar chart of precision at top 20, 50 and 100 for the baseline and the random forest, with a dashed line at the 39% random-pick rate" width="1200" height="800">
+<figcaption>Figure 1. Share of top-ranked test pages observed declining. The dashed line is the random-pick rate (about 0.39).</figcaption></figure>
+<p>The random forest ranks best on every ranking metric. The baseline’s top-ranked pages were observed declining less often than a random pick (0.24 and 0.36 against about 0.39), so in this slice its ordering was not useful for finding declining pages. Logistic regression separates pages better than the baseline overall (AUC 0.700), but its top 50 is only near random level (0.40). These are directional results: the forest was chosen by P@50 on this same test split, and P@50 rests on 50 pages, roughly ±0.06 of sampling noise.</p>
+<figure><img src="assets/top_feature_importance.svg" alt="Horizontal bar chart of the twelve most important model features" width="640">
+<figcaption>Figure 2. Most-used model signals (importance from a forest refit on all pages). Days with impressions, 90-day impressions, average position and content age lead. This shows what the model used, not why pages decline.</figcaption></figure>
+
+<h2 id="limits">5 Limitations and honest framing</h2>
+<ul>
+<li><strong>Observed, not causal.</strong> The label is an observed downward trend. This work does not show that refreshing a page causes recovery.</li>
+<li><strong>Model chosen on the reporting split.</strong> The best model was picked by precision@50 on the same held-out clients used to report results, so its score is somewhat optimistic.</li>
+<li><strong>Small top-k.</strong> Precision@50 rests on 50 pages (roughly ±0.06 noise).</li>
+<li><strong>Small, anonymized slice.</strong> 30,000 pages from 32 clients; the test split is 2,325 pages from only 6 clients. Results are directional, not production evidence.</li>
+<li><strong>Client effects.</strong> The test clients have a lower declining rate (about 39%) than the full data (54%). Errors may cluster by client, and new clients may behave differently.</li>
+<li><strong>Feature importance is association.</strong> Importances come from a model refit on all 30,000 pages; their direction was not tested.</li>
+<li><strong>The refresh queue is illustrative.</strong> Queue scores for all pages come from models refit on all rows, so scores for training clients are in-sample. The queue shows the workflow, not a performance estimate.</li>
+<li><strong>Reason codes are descriptive.</strong> Some codes (for example “declining with demand”) are derived from the observed label and are not model findings.</li>
+<li><strong>Label and time.</strong> “Declining” depends on how trend direction was computed upstream, and the slice has no calendar dates, so time-based validation was not possible.</li>
+</ul>
+
+<h2 id="recs">6 Ranked recommendations</h2>
+<p>Ordered by how well the evidence supports them. All are decision-support, not causal claims.</p>
+<ol>
+<li><strong>Order the first review batch with the model ranking, not the baseline score.</strong> The forest’s top 50 was 74% observed declining against 24% for the baseline and about 39% for a random pick. <em>Confidence: medium</em>, because the model was selected on the same split and the top-50 sample is small.</li>
+<li><strong>Retire the baseline score as an ordering rule.</strong> Its top 20, 50 and 100 were observed declining less often than a random pick (0.15, 0.24, 0.36 against about 0.39); ROC AUC 0.627. <em>Confidence: medium.</em></li>
+<li><strong>Look first at visible pages: many days with impressions and high 90-day impressions.</strong> These are the two strongest model signals. <em>Confidence: medium-low</em>; importance shows what the model used, not direction or cause.</li>
+<li><strong>Check pages with weaker search position and older content next.</strong> These are the next strongest signals. <em>Confidence: low</em>; direction was not tested, so inspect a sample before acting.</li>
+<li><strong>Re-test on new clients and a later time window before using the ranking operationally.</strong> The evidence rests on 32 clients, 6 test clients, one slice, no dates and a model chosen on the reporting split. <em>Confidence: high</em> that this check is needed.</li>
+</ol>
+
+<h2 id="repro">7 Reproducibility</h2>
+<p>Everything is in the public repository <a href="https://github.com/data00077/flyrank-ml-internship">data00077/flyrank-ml-internship</a>. The main notebook is <a href="https://github.com/data00077/flyrank-ml-internship/blob/main/work/notebooks/capstone.ipynb"><code>work/notebooks/capstone.ipynb</code></a>. It clones the repository, runs the pipeline scripts in <code>scripts/</code> (feature preparation, baseline, model training, evaluation) and reproduces every number and chart on this page. Earlier weekly notebooks in <code>work/notebooks/</code> cover the data contract, baseline, model and validation audit. The random seed is 42 and the bundled data is the anonymized starter CSV only.</p>
+
+<footer id="ack">
+<h2 style="border:0;margin-top:0;font-size:1.2rem">8 Acknowledgments and data credit</h2>
+<p>Built on the FlyRank ML Internship dataset — <a href="https://flyrank.ai" target="_blank" rel="noopener">https://flyrank.ai</a>. Thanks to the FlyRank team and mentors for the data, the pipeline template and feedback during the internship. No client names, URLs or private queries appear on this page.</p>
+</footer>
+</main>
+</body>
+</html>
