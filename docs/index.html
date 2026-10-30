@@ -78,7 +78,7 @@ footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--line);color:v
 <tr><td>Decision tree</td><td>0.742</td><td>0.575</td><td>0.45</td><td>0.58</td><td>0.62</td><td>0.716</td></tr>
 <tr class="best"><td>Random forest</td><td>0.750</td><td>0.618</td><td>0.65</td><td>0.74</td><td>0.72</td><td>0.744</td></tr>
 </tbody></table></div>
-<figure><img src="assets/model_vs_baseline.png" alt="Bar chart of precision at top 20, 50 and 100 for the baseline and the random forest, with a dashed line at the 39% random-pick rate" width="1200" height="800">
+<figure><img src="model_vs_baseline.png" alt="Bar chart of precision at top 20, 50 and 100 for the baseline and the random forest, with a dashed line at the 39% random-pick rate" width="1200" height="800">
 <figcaption>Figure 1. Share of top-ranked test pages observed declining. The dashed line is the random-pick rate (about 0.39).</figcaption></figure>
 <p>The random forest ranks best on every ranking metric. The baseline’s top-ranked pages were observed declining less often than a random pick (0.24 and 0.36 against about 0.39), so in this slice its ordering was not useful for finding declining pages. Logistic regression separates pages better than the baseline overall (AUC 0.700), but its top 50 is only near random level (0.40). These are directional results: the forest was chosen by P@50 on this same test split, and P@50 rests on 50 pages, roughly ±0.06 of sampling noise.</p>
 <figure><img src="assets/top_feature_importance.svg" alt="Horizontal bar chart of the twelve most important model features" width="640">
